@@ -4,6 +4,8 @@ const request = require('request');
 const md5 = require("md5");
 const app = express();
 app.use(express.json());
+
+var getBeaninfo = require ('./jd_change/bean_info.js');
 let ReturnMessage = '';
 let ReturnMessageMonth = '';
 let ReturnMessageTitle = "";
@@ -134,6 +136,17 @@ app.post("/getChangePro", async (req, res) => {
         res.status(201).send("无Cookie");
     }
 
+})
+
+app.post("/getBeaninfo",async(req, res) =>{
+    var data = req.body.data;
+    if (data) {
+        var result=await getBeaninfo.getBeaninfo(data);
+        res.status(200).send(result);
+        return
+    }else {
+        res.status(201).send("无Cookie");
+    }
 })
 
 async function mcx1() {
