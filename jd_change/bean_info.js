@@ -27,6 +27,7 @@ async function getBeaninfo(ck) {
         $.message = '';
         $.balance = 0;
         $.expiredBalance = 0;
+        allMessage = "";
         await Promise.all([
             TotalBean(),
             bean()
