@@ -91,6 +91,10 @@ async function getChangePro(ck) {
         $.PlustotalScore = 0;
         $.hfjifen = ""
         $.diandianquan = ""
+        $.jxgolds = ""
+        $.jdtrycount = ""
+        $.waitdrawcount = ""
+        $.waitdrawname = ""
         console.log(`******开始查询${$.nickName || $.UserName}*********`);
         var start = new Date().getTime()
         await Promise.all([
@@ -121,6 +125,9 @@ async function getChangePro(ck) {
             queryScores(),
             hfjifen(),
             diandianquan(),
+            jxgold(),
+            trialcount(),
+            trialWaitdraw(),
         ])
         var end = new Date().getTime()
         console.log('查询耗时', `${end - start}ms`)
@@ -302,7 +309,7 @@ async function showMsg() {
         ReturnMessage += `【东东工厂】${$.ddFactoryInfo}\n`
     }
     if ($.hfjifen) {
-    ReturnMessage += `【话费积分】${$.hfjifen}分\n`
+        ReturnMessage += `【话费积分】${$.hfjifen}分\n`
     }
     if ($.diandianquan) {
         ReturnMessage += `【点点券】${$.diandianquan}券\n`
@@ -328,12 +335,18 @@ async function showMsg() {
                 ReturnMessage += `(${(responsec.result.medalPercent).toFixed(0)}%,${responsec.result.medalNum}/${responsec.result.medalNum + responsec.result.needCollectMedalNum}块)\n`;
             } else if (!$.petInfo.goodsInfo) {
                 ReturnMessage += `【东东萌宠】暂未选购新的商品!\n`;
-
-
             }
         }
     }
-
+    if ($.jxgolds) {
+        ReturnMessage += `【京喜购物金】${$.jxgolds}金\n`
+    }
+    if ($.jdtrycount) {
+        ReturnMessage += `【京东试用】${$.jdtrycount}件商品申请中,${$.waitdrawcount}件试用待领取\n`
+    }
+    if ($.waitdrawname) {
+        ReturnMessage += `【待领取试用】${$.waitdrawname}\n`
+    }
 
     if (strGuoqi) {
         ReturnMessage += `💸💸💸临期京豆明细💸💸💸\n`;
@@ -420,6 +433,16 @@ async function bean() {
 function reqpost(options) {
     return new Promise((resolve, reject) => {
         request.post(options, (error, response, body) => {
+            if (error) reject(error);
+            // console.log(response.statusCode)
+            resolve(body);
+        });
+    });
+}
+
+function reqget(options) {
+    return new Promise((resolve, reject) => {
+        request.get(options, (error, response, body) => {
             if (error) reject(error);
             // console.log(response.statusCode)
             resolve(body);
@@ -2221,9 +2244,6 @@ async function queryScores() {
 async function hfjifen() {
     let t = new Date().getTime()
     let encstr = md5(t + "e9c398ffcb2d4824b4d0a703e38yffdd")
-    // console.log(t)
-    // console.log(encstr)
-    // console.log(cookie)
     let opts = {
         url: `https://dwapp.jd.com/user/dwSignInfo`,
         headers: {
@@ -2238,26 +2258,20 @@ async function hfjifen() {
             'encStr': encstr
         })
     }
-
     let data = await reqpost(opts)
-        try {
-            const result = JSON.parse(data)
-            // console.log(result)
-            if (result.code == 200) {
-                $.hfjifen = result.data.balanceNum;
-            }
-        } catch (e) {
-            $.logErr(e);
+    try {
+        const result = JSON.parse(data)
+        // console.log(result)
+        if (result.code == 200) {
+            $.hfjifen = result.data.balanceNum;
         }
-
-
+    } catch (e) {
+        $.logErr(e);
+    }
 }
 
 async function diandianquan() {
     let t = new Date().getTime()
-    // console.log(t)
-    // console.log(encstr)
-    // console.log(cookie)
     let opts = {
         url: `https://api.m.jd.com/api?appid=coupon-necklace&functionId=necklace_newHomePage&loginType=2&t=${t}`,
         headers: {
@@ -2265,7 +2279,6 @@ async function diandianquan() {
             'user-agent': 'jdpingou;iPhone;4.13.0;14.4.2;${randomString(40)};network/wifi;model/iPhone10,2;appBuild/100609;supportApplePay/1;hasUPPay/0;pushNoticeIsOpen/1;hasOCPay/0;supportBestPay/0;session/${Math.random * 98 + 1};pap/JA2019_3111789;brand/apple;supportJDSHWK/1;Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
             'referer': 'https://mypoint.jd.com/',
             'content-type': 'application/json',
-
         },
         body: "body={}"
     }
@@ -2282,6 +2295,157 @@ async function diandianquan() {
 
 
 }
+
+async function jxgold() {
+    let opts = {
+        url: `https://m.jingxi.com/prmt_playearn/playearn/golddetail?pageIndex=1&pageSize=20`,
+        headers: {
+            'cookie': cookie,
+            'user-agent': 'jdpingou;iPhone;4.13.0;14.4.2;${randomString(40)};network/wifi;model/iPhone10,2;appBuild/100609;supportApplePay/1;hasUPPay/0;pushNoticeIsOpen/1;hasOCPay/0;supportBestPay/0;session/${Math.random * 98 + 1};pap/JA2019_3111789;brand/apple;supportJDSHWK/1;Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+            'referer': 'https://mypoint.jd.com/',
+            'content-type': 'application/json',
+        },
+    }
+    let data = await reqget(opts)
+    try {
+        const result = JSON.parse(data)
+        // console.log(result)
+        if (result.msg === "success") {
+            $.jxgolds = result.data.balanceGold;
+        }
+    } catch (e) {
+        $.logErr(e);
+    }
+}
+
+async function trialcount() {
+    let opts = {
+        url: `https://api.m.jd.com/client.action`,
+        headers: {
+            'cookie': cookie + "__jda=182444734.16618311243121250988147.1661831124.1662650466.1662711059.39",
+            'user-agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Mobile Safari/537.36 Edg/105.0.1343.27',
+            // 'referer': 'https://mypoint.jd.com/',
+            'referer': 'https://prodev.m.jd.com/',
+            'content-type': 'application/x-www-form-urlencoded',
+            'origin': 'https://prodev.m.jd.com',
+            'accept': 'application/json, text/plain, */*',
+        },
+        body: "appid=newtry&functionId=try_MyTrials&clientVersion=11.2.5&client=wh5&osVersion=12&networkType=wifi&body=%7B%22page%22%3A1%2C%22selected%22%3A1%7D",
+    }
+    let opts1 = {
+        url: `https://api.m.jd.com/client.action`,
+        headers: {
+            'cookie': cookie + "__jda=182444734.16618311243121250988147.1661831124.1662650466.1662711059.39",
+            'user-agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Mobile Safari/537.36 Edg/105.0.1343.27',
+            // 'referer': 'https://mypoint.jd.com/',
+            'referer': 'https://prodev.m.jd.com/',
+            'content-type': 'application/x-www-form-urlencoded',
+            'origin': 'https://prodev.m.jd.com',
+            'accept': 'application/json, text/plain, */*',
+        },
+        body: "appid=newtry&functionId=try_MyTrials&clientVersion=11.2.5&client=wh5&osVersion=12&networkType=wifi&body=%7B%22page%22%3A5%2C%22selected%22%3A1%7D",
+    }
+    let opts2 = {
+        url: `https://api.m.jd.com/client.action`,
+        headers: {
+            'cookie': cookie + "__jda=182444734.16618311243121250988147.1661831124.1662650466.1662711059.39",
+            'user-agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Mobile Safari/537.36 Edg/105.0.1343.27',
+            // 'referer': 'https://mypoint.jd.com/',
+            'referer': 'https://prodev.m.jd.com/',
+            'content-type': 'application/x-www-form-urlencoded',
+            'origin': 'https://prodev.m.jd.com',
+            'accept': 'application/json, text/plain, */*',
+        },
+        body: "appid=newtry&functionId=try_MyTrials&clientVersion=11.2.5&client=wh5&osVersion=12&networkType=wifi&body=%7B%22page%22%3A9%2C%22selected%22%3A1%7D",
+    }
+    try {
+        let tcall = await Promise.all([
+            reqpost(opts),
+            reqpost(opts1),
+            reqpost(opts2)
+        ])
+        // console.log(tcall)
+        let result1 = JSON.parse(tcall[0])
+        let result5 = JSON.parse(tcall[1])
+        let result9 = JSON.parse(tcall[2])
+
+        if (result1.success === true) {
+            let tc1 = result1.data.list.length
+            if (tc1 === 12) {
+                if (result5.success === true) {
+                    let tc5 = result5.data.list.length
+                    if (tc5 === 12) {
+                        if (result9.success === true) {
+                            let tc9 = result9.data.list.length
+                            if (tc9 === 12) {
+                                $.jdtrycount = "大于108"
+                            } else if (tc9 !== 0 && tc9 < 12) {
+                                $.jdtrycount = "" + (96 + tc9)
+                            } else {
+                                $.jdtrycount = "大于60,小于96"
+                            }
+                        }
+                    } else if (tc5 !== 0 && tc5 < 12) {
+                        $.jdtrycount = "" + (48 + tc5)
+                    } else {
+                        $.jdtrycount = "大于12,小于48"
+                    }
+                }
+            } else if (tc1 !== 0 && tc1 < 12) {
+                $.jdtrycount = "" + tc1
+            } else {
+                $.jdtrycount = "小于等于0"
+            }
+        }
+    } catch (e) {
+        $.logErr(e);
+    }
+}
+
+async function trialWaitdraw() {
+    let opts = {
+        url: `https://api.m.jd.com/client.action`,
+        headers: {
+            'cookie': cookie + "__jda=182444734.16618311243121250988147.1661831124.1662650466.1662711059.39",
+            'user-agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Mobile Safari/537.36 Edg/105.0.1343.27',
+            // 'referer': 'https://mypoint.jd.com/',
+            'referer': 'https://prodev.m.jd.com/',
+            'content-type': 'application/x-www-form-urlencoded',
+            'origin': 'https://prodev.m.jd.com',
+            'accept': 'application/json, text/plain, */*',
+        },
+        body: "appid=newtry&functionId=try_MyTrials&clientVersion=11.2.5&client=wh5&osVersion=12&networkType=wifi&body=%7B%22page%22%3A1%2C%22selected%22%3A2%7D",
+    }
+
+    try {
+        let data = await reqpost(opts)
+        console.log(data)
+        let result = JSON.parse(data)
+        console.log(result)
+        if (result.success === true) {
+            let drawlist = result.data.list
+            let draw = 0;
+            if (drawlist.length !== 0) {
+                for (let i = 0; i < drawlist.length; i++) {
+                    if (drawlist[i].tryButtonList != null) {
+                        if (drawlist[i].tryButtonList.length === 2) {
+                            if (drawlist[i].tryButtonList[0].id <= 2) {
+                                draw++
+                                $.waitdrawname += drawlist[i].trialName
+                            }
+                        }
+                    }
+                }
+                $.waitdrawcount = "" + draw
+            } else {
+                $.waitdrawcount = "0"
+            }
+        }
+    } catch (e) {
+        $.logErr(e);
+    }
+}
+
 
 // prettier-ignore
 function Env(t, e) {
@@ -2711,7 +2875,6 @@ function Env(t, e) {
     }
     (t, e)
 }
-
 
 
 // prettier-ignore
