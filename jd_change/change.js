@@ -91,6 +91,7 @@ async function getChangePro(ck) {
         $.PlustotalScore = 0;
         $.hfjifen = ""
         $.diandianquan = ""
+        $.jxgolds = ""
         console.log(`******开始查询${$.nickName || $.UserName}*********`);
         var start = new Date().getTime()
         await Promise.all([
@@ -121,6 +122,7 @@ async function getChangePro(ck) {
             queryScores(),
             hfjifen(),
             diandianquan(),
+            jxgold(),
         ])
         var end = new Date().getTime()
         console.log('查询耗时', `${end - start}ms`)
@@ -302,7 +304,7 @@ async function showMsg() {
         ReturnMessage += `【东东工厂】${$.ddFactoryInfo}\n`
     }
     if ($.hfjifen) {
-    ReturnMessage += `【话费积分】${$.hfjifen}分\n`
+        ReturnMessage += `【话费积分】${$.hfjifen}分\n`
     }
     if ($.diandianquan) {
         ReturnMessage += `【点点券】${$.diandianquan}券\n`
@@ -328,12 +330,12 @@ async function showMsg() {
                 ReturnMessage += `(${(responsec.result.medalPercent).toFixed(0)}%,${responsec.result.medalNum}/${responsec.result.medalNum + responsec.result.needCollectMedalNum}块)\n`;
             } else if (!$.petInfo.goodsInfo) {
                 ReturnMessage += `【东东萌宠】暂未选购新的商品!\n`;
-
-
             }
         }
     }
-
+    if ($.jxgolds) {
+        ReturnMessage += `【京喜购物金】${$.jxgolds}金\n`
+    }
 
     if (strGuoqi) {
         ReturnMessage += `💸💸💸临期京豆明细💸💸💸\n`;
@@ -420,6 +422,15 @@ async function bean() {
 function reqpost(options) {
     return new Promise((resolve, reject) => {
         request.post(options, (error, response, body) => {
+            if (error) reject(error);
+            // console.log(response.statusCode)
+            resolve(body);
+        });
+    });
+}
+function reqget(options) {
+    return new Promise((resolve, reject) => {
+        request.get(options, (error, response, body) => {
             if (error) reject(error);
             // console.log(response.statusCode)
             resolve(body);
@@ -2221,9 +2232,6 @@ async function queryScores() {
 async function hfjifen() {
     let t = new Date().getTime()
     let encstr = md5(t + "e9c398ffcb2d4824b4d0a703e38yffdd")
-    // console.log(t)
-    // console.log(encstr)
-    // console.log(cookie)
     let opts = {
         url: `https://dwapp.jd.com/user/dwSignInfo`,
         headers: {
@@ -2238,26 +2246,20 @@ async function hfjifen() {
             'encStr': encstr
         })
     }
-
     let data = await reqpost(opts)
-        try {
-            const result = JSON.parse(data)
-            // console.log(result)
-            if (result.code == 200) {
-                $.hfjifen = result.data.balanceNum;
-            }
-        } catch (e) {
-            $.logErr(e);
+    try {
+        const result = JSON.parse(data)
+        // console.log(result)
+        if (result.code == 200) {
+            $.hfjifen = result.data.balanceNum;
         }
-
-
+    } catch (e) {
+        $.logErr(e);
+    }
 }
 
 async function diandianquan() {
     let t = new Date().getTime()
-    // console.log(t)
-    // console.log(encstr)
-    // console.log(cookie)
     let opts = {
         url: `https://api.m.jd.com/api?appid=coupon-necklace&functionId=necklace_newHomePage&loginType=2&t=${t}`,
         headers: {
@@ -2265,7 +2267,6 @@ async function diandianquan() {
             'user-agent': 'jdpingou;iPhone;4.13.0;14.4.2;${randomString(40)};network/wifi;model/iPhone10,2;appBuild/100609;supportApplePay/1;hasUPPay/0;pushNoticeIsOpen/1;hasOCPay/0;supportBestPay/0;session/${Math.random * 98 + 1};pap/JA2019_3111789;brand/apple;supportJDSHWK/1;Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
             'referer': 'https://mypoint.jd.com/',
             'content-type': 'application/json',
-
         },
         body: "body={}"
     }
@@ -2275,6 +2276,31 @@ async function diandianquan() {
         // console.log(result)
         if (result.data.biz_msg === "OK") {
             $.diandianquan = result.data.result.totalScore;
+        }
+    } catch (e) {
+        $.logErr(e);
+    }
+
+
+}
+
+async function jxgold() {
+    let t = new Date().getTime()
+    let opts = {
+        url: `https://m.jingxi.com/prmt_playearn/playearn/golddetail?pageIndex=1&pageSize=20`,
+        headers: {
+            'cookie': cookie,
+            'user-agent': 'jdpingou;iPhone;4.13.0;14.4.2;${randomString(40)};network/wifi;model/iPhone10,2;appBuild/100609;supportApplePay/1;hasUPPay/0;pushNoticeIsOpen/1;hasOCPay/0;supportBestPay/0;session/${Math.random * 98 + 1};pap/JA2019_3111789;brand/apple;supportJDSHWK/1;Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+            'referer': 'https://mypoint.jd.com/',
+            'content-type': 'application/json',
+        },
+    }
+    let data = await reqget(opts)
+    try {
+        const result = JSON.parse(data)
+        // console.log(result)
+        if (result.msg === "success") {
+            $.jxgolds = result.data.balanceGold;
         }
     } catch (e) {
         $.logErr(e);
@@ -2711,7 +2737,6 @@ function Env(t, e) {
     }
     (t, e)
 }
-
 
 
 // prettier-ignore
