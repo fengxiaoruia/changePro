@@ -7,6 +7,7 @@ cron "30 21 * * *" jd_bean_change.js, tag:资产变化强化版by-ccwav
 
 const $ = new Env('京东资产变动');
 const request = require('request');
+const fs = require("fs")
 const md5 = require("md5");
 let ReturnMessage = '';
 let ReturnMessageMonth = '';
@@ -17,19 +18,8 @@ const JD_API_HOST = 'https://api.m.jd.com/client.action';
 
 let llPetError = false;
 let strGuoqi = "";
-let RemainMessage = '\n';
 var responsec = "";
 var initPetTownRes = "";
-RemainMessage += "⭕活动攻略:⭕" + '\n';
-RemainMessage += '【极速金币】京东极速版->我的->金币(极速版使用)\n';
-RemainMessage += '【京东赚赚】微信->京东赚赚小程序->底部赚好礼->提现无门槛红包(京东使用)\n';
-RemainMessage += '【京东秒杀】京东->中间频道往右划找到京东秒杀->中间点立即签到->兑换无门槛红包(京东使用)\n';
-RemainMessage += '【东东萌宠】京东->我的->东东萌宠,完成是京东红包,可以用于京东app的任意商品\n';
-RemainMessage += '【领现金】京东->我的->东东萌宠->领现金(微信提现+京东红包)\n';
-RemainMessage += '【东东农场】京东->我的->东东农场,完成是京东红包,可以用于京东app的任意商品\n';
-RemainMessage += '【京喜工厂】京喜->我的->京喜工厂,完成是商品红包,用于购买指定商品(不兑换会过期)\n';
-RemainMessage += '【京东金融】京东金融app->我的->养猪猪,完成是白条支付券,支付方式选白条支付时立减.\n';
-RemainMessage += '【其他】京喜红包只能在京喜使用,其他同理';
 
 let llgeterror = false;
 
@@ -95,6 +85,7 @@ async function getChangePro(ck) {
         $.jdtrycount = ""
         $.waitdrawcount = ""
         $.waitdrawname = ""
+        $.quanpin =""
         console.log(`******开始查询${$.nickName || $.UserName}*********`);
         var start = new Date().getTime()
         await Promise.all([
@@ -128,7 +119,9 @@ async function getChangePro(ck) {
             jxgold(),
             trialcount(),
             trialWaitdraw(),
+            getCoupon(),
         ])
+        // await getCoupon()
         var end = new Date().getTime()
         console.log('查询耗时', `${end - start}ms`)
         await showMsg();
@@ -250,7 +243,7 @@ async function showMsg() {
         ReturnMessage += `【京喜牧场】${$.JDEggcnt}枚鸡蛋\n`;
     }
     if ($.JDtotalcash) {
-        ReturnMessage += `【极速金币】${$.JDtotalcash}币(≈${($.JDtotalcash / 10000).toFixed(2)}R)\n`;
+        ReturnMessage += `【特价金币】${$.JDtotalcash}币(≈${($.JDtotalcash / 10000).toFixed(2)}R)\n`;
     }
     if ($.JdzzNum) {
         ReturnMessage += `【京东赚赚】${$.JdzzNum}币(≈${($.JdzzNum / 10000).toFixed(2)}R)\n`;
@@ -346,6 +339,12 @@ async function showMsg() {
     }
     if ($.waitdrawname) {
         ReturnMessage += `【待领取试用】${$.waitdrawname}\n`
+    }
+    if ($.quanpin){
+        ReturnMessage += `${$.quanpin}`
+    }
+    if ($.YunFeiQuan){
+        ReturnMessage += `【运费券】${$.YunFeiTitle},${$.YunFeiQuan}张，到期时间:${$.YunFeiQuanEndTime}\n`;
     }
 
     if (strGuoqi) {
@@ -976,7 +975,7 @@ function redPacket() {
                                 if (vo['endTime'] === t) {
                                     $.jxRedExpire += parseFloat(vo.balance)
                                 }
-                            } else if (vo.activityName.includes("极速版")) {
+                            } else if (vo.activityName.includes("特价")) {
                                 $.jsRed += parseFloat(vo.balance)
                                 if (vo['endTime'] === t) {
                                     $.jsRedExpire += parseFloat(vo.balance)
@@ -1003,7 +1002,7 @@ function redPacket() {
                         if ($.jxRed > 0)
                             $.message += `【京喜红包】${$.jxRed}(将过期${$.jxRedExpire.toFixed(2)})R \n`;
                         if ($.jsRed > 0)
-                            $.message += `【极速红包】${$.jsRed}(将过期${$.jsRedExpire.toFixed(2)})R \n`;
+                            $.message += `【特价红包】${$.jsRed}(将过期${$.jsRedExpire.toFixed(2)})R \n`;
                         if ($.jdRed > 0)
                             $.message += `【京东红包】${$.jdRed}(将过期${$.jdRedExpire.toFixed(2)})R \n`;
                         if ($.jdhRed > 0)
@@ -1022,22 +1021,35 @@ function redPacket() {
 }
 
 function getCoupon() {
-    return new Promise(resolve => {
+    return new Promise(async resolve => {
         let options = {
-            url: `https://wq.jd.com/activeapi/queryjdcouponlistwithfinance?state=1&wxadd=1&filterswitch=1&_=${Date.now()}&sceneval=2&g_login_type=1&callback=jsonpCBKB&g_ty=ls`,
+            url: `https://wq.jd.com/activeapi/queryjdcouponlistwithfinance?state=1&wxadd=1&filterswitch=1&_=${Date.now()}&sceneval=2&callback=jsonpCBKB&g_ty=ls`,
             headers: {
                 'authority': 'wq.jd.com',
-                "User-Agent": "jdapp;iPhone;10.1.2;15.0;network/wifi;Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1",
+                "User-Agent": "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Mobile Safari/537.36 Edg/105.0.1343.27",
                 'accept': '*/*',
                 'referer': 'https://wqs.jd.com/',
                 'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
                 'cookie': cookie
             },
-            timeout: 10000
+            timeout: 2000
         }
+
         $.get(options, async (err, resp, data) => {
             try {
+
+                if (!data) {
+                    return
+                }
+
                 data = JSON.parse(data.match(new RegExp(/jsonpCBK.?\((.*);*/))[1]);
+                // console.log(data.coupon.useable)
+                // for (let i = 0; i < data.coupon.useable.length; i++) {
+                //     console.log(data.coupon.useable[i].couponTitle)
+                //     console.log(data.coupon.useable[i].limitStr)
+                //     console.log("\n")
+                // }
+
                 let couponTitle = '';
                 let couponId = '';
                 // 删除可使用且非超市、生鲜、京贴;
@@ -1058,32 +1070,34 @@ function getCoupon() {
                             var decquota = parseFloat(useable[i].quota).toFixed(2);
                             var decdisc = parseFloat(useable[i].discount).toFixed(2);
 
-                            $.message += `【全品类券】满${decquota}减${decdisc}R`;
+                            $.quanpin += `【全品类券】满${decquota}减${decdisc}R`;
 
                             if (useable[i].endTime < $.todayEndTime) {
-                                $.message += `(今日过期,${$.platFormInfo})\n`;
+                                $.quanpin += `(今日过期,${$.platFormInfo})\n`;
                             } else if (useable[i].endTime < $.tomorrowEndTime) {
-                                $.message += `(明日将过期,${$.platFormInfo})\n`;
+                                $.quanpin += `(明日将过期,${$.platFormInfo})\n`;
                             } else {
-                                $.message += `(${$.platFormInfo})\n`;
+                                $.quanpin += `(${$.platFormInfo})\n`;
                             }
 
                         }
                     }
                     if (useable[i].couponTitle.indexOf('运费券') > -1 && useable[i].limitStr.indexOf('自营商品运费') > -1) {
                         if (!$.YunFeiTitle) {
-                            $.YunFeiTitle = useable[i].couponTitle;
+                            let yftitle = useable[i].couponTitle.slice(0,useable[i].couponTitle.indexOf('运费券')+3)
+                            $.YunFeiTitle = yftitle;
                             $.YunFeiQuanEndTime = new Date(parseInt(useable[i].endTime)).Format('yyyy-MM-dd');
                             $.YunFeiQuan += 1;
+
                         } else {
-                            if ($.YunFeiTitle == useable[i].couponTitle) {
+                            if ($.YunFeiTitle === useable[i].couponTitle.slice(0,useable[i].couponTitle.indexOf('运费券')+3)) {
                                 $.YunFeiQuanEndTime = new Date(parseInt(useable[i].endTime)).Format('yyyy-MM-dd');
                                 $.YunFeiQuan += 1;
                             } else {
                                 if (!$.YunFeiTitle2)
-                                    $.YunFeiTitle2 = useable[i].couponTitle;
+                                    $.YunFeiTitle2 = useable[i].couponTitle.slice(0,useable[i].couponTitle.indexOf('运费券')+3);
 
-                                if ($.YunFeiTitle2 == useable[i].couponTitle) {
+                                if ($.YunFeiTitle2 === useable[i].couponTitle.slice(0,useable[i].couponTitle.indexOf('运费券')+3)) {
                                     $.YunFeiQuanEndTime2 = new Date(parseInt(useable[i].endTime)).Format('yyyy-MM-dd');
                                     $.YunFeiQuan2 += 1;
                                 }
@@ -1092,7 +1106,7 @@ function getCoupon() {
                         }
 
                     }
-                    if (useable[i].couponTitle.indexOf('极速版APP活动') > -1 && useable[i].limitStr == '仅可购买活动商品') {
+                    if (useable[i].couponTitle.indexOf('京东特价APP活动') > -1 && useable[i].limitStr == '仅可购买活动商品') {
                         $.beginTime = useable[i].beginTime;
                         if ($.beginTime < new Date().getTime() && useable[i].coupontype === 1) {
                             if (useable[i].platFormInfo)
@@ -1100,7 +1114,7 @@ function getCoupon() {
                             var decquota = parseFloat(useable[i].quota).toFixed(2);
                             var decdisc = parseFloat(useable[i].discount).toFixed(2);
 
-                            $.message += `【极速版券】满${decquota}减${decdisc}R`;
+                            $.message += `【京东特价券】满${decquota}减${decdisc}R`;
 
                             if (useable[i].endTime < $.todayEndTime) {
                                 $.message += `(今日过期,${$.platFormInfo})\n`;
@@ -2419,9 +2433,9 @@ async function trialWaitdraw() {
 
     try {
         let data = await reqpost(opts)
-        console.log(data)
+        // console.log(data)
         let result = JSON.parse(data)
-        console.log(result)
+        // console.log(result)
         if (result.success === true) {
             let drawlist = result.data.list
             let draw = 0;
