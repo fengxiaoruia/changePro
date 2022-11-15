@@ -91,6 +91,7 @@ async function getChangePro(ck) {
         await Promise.allSettled([
             TotalBean(),
             bean(), //京豆查询
+            queryexpirejingdou(),
             jdfruitRequest('taskInitForFarm', {
                 "version": 14,
                 "channel": 1,
@@ -375,12 +376,12 @@ async function bean() {
         yesterdayArr = [],
         todayArr = [];
     do {
-        let response = await getJingBeanBalanceDetail1(page);
+        let response = await getJingBeanBalanceDetail(page);
         // await $.wait(1000);
         // console.log(`第${page}页: ${JSON.stringify(response)}`);
         if (response && response.code === "0") {
             page++;
-            let detailList = response.detailList;
+            let detailList = response.jingDetailList;
             if (detailList && detailList.length > 0) {
                 for (let item of detailList) {
                     const date = item.date.replace(/-/g, '/') + "+08:00";
@@ -778,11 +779,10 @@ function isLoginByX1a0He() {
 function getJingBeanBalanceDetail(page) {
     return new Promise(async resolve => {
         const options = {
-            "url": `https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail`,
+            "url": `https://bean.m.jd.com/beanDetail/detail.json?page=${page}`,
             "body": `body=${escape(JSON.stringify({"pageSize": "20", "page": page.toString()}))}&appid=ld`,
             "headers": {
-                'User-Agent': $.isNode() ? (process.env.JD_USER_AGENT ? process.env.JD_USER_AGENT : (require('./USER_AGENTS').USER_AGENT)) : ($.getdata('JDUA') ? $.getdata('JDUA') : "jdapp;iPhone;9.4.4;14.3;network/4g;Mozilla/5.0 (iPhone; CPU iPhone OS 14_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1"),
-                'Host': 'api.m.jd.com',
+                'User-Agent': "Mozilla/5.0 (Linux; Android 12; SM-G9880) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Mobile Safari/537.36 EdgA/106.0.1370.47",
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'Cookie': cookie,
             }
@@ -790,18 +790,18 @@ function getJingBeanBalanceDetail(page) {
         $.post(options, (err, resp, data) => {
             try {
                 if (err) {
-                    console.log(`${JSON.stringify(err)}`)
-                    console.log(`getJingBeanBalanceDetail API请求失败，请检查网路重试`)
+                    // console.log(`${JSON.stringify(err)}`)
+                    // console.log(`${$.name} API请求失败，请检查网路重试`)
                 } else {
                     if (data) {
                         data = JSON.parse(data);
                         // console.log(data)
                     } else {
-                        console.log(`京东服务器返回空数据`)
+                        // console.log(`京东服务器返回空数据`)
                     }
                 }
             } catch (e) {
-                $.logErr(e, resp)
+                // $.logErr(e, resp)
             } finally {
                 resolve(data);
             }
@@ -818,64 +818,6 @@ function randomnum(num) {
     return string;
 }
 
-async function getJingBeanBalanceDetail1(page) {
-    let functionId = 'getJingBeanBalanceDetail'
-    let uuid = "87" + randomnum(13) + "-53" + randomnum(10)
-    let st = Date.now()
-    let sv = '111'
-    let client = 'android'
-    let clientVersion = '11.2.8'
-    let dbody = JSON.stringify({page: page, pageSize: 20})
-    const options = {
-        url: 'http://127.0.0.1:3500/api/getsign',
-        body: JSON.stringify({
-            functionId:functionId,
-            uuid:uuid,
-            st:st,
-            sv:sv,
-            client:client,
-            clientVersion:clientVersion,
-            body:dbody
-        }),
-        headers: {
-            'content-type': 'application/json',
-        },
-    };
-    let sign = await reqpost(options)
-    console.log(sign)
-    return new Promise(async resolve => {
-        const options = {
-            "url": 'https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.2.8&uuid=' + uuid + '&st=' + st + '&sign=' + sign + '&sv=111&client=android&area=13_1072_2926_29094',
-            "body": `lmt=0&body=${encodeURIComponent(dbody)}`,
-            "headers": {
-                'User-Agent': $.isNode() ? (process.env.JD_USER_AGENT ? process.env.JD_USER_AGENT : (require('./USER_AGENTS').USER_AGENT)) : ($.getdata('JDUA') ? $.getdata('JDUA') : "jdapp;iPhone;9.4.4;14.3;network/4g;Mozilla/5.0 (iPhone; CPU iPhone OS 14_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1"),
-                'Host': 'api.m.jd.com',
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Cookie': cookie,
-            }
-        }
-        console.log(options)
-        $.post(options, (err, resp, data) => {
-            try {
-                if (err) {
-                    console.log(`${JSON.stringify(err)}`)
-                    console.log(`getJingBeanBalanceDetail API请求失败，请检查网路重试`)
-                } else {
-                    if (data) {
-                        data = JSON.parse(data);
-                        console.log(data)
-                    } else {
-                        console.log(`京东服务器返回空数据`)
-                    }
-                }
-            } catch (e) {
-                $.logErr(e, resp)
-            } finally {
-                resolve(data);
-            }
-        })
-    })
-}
 
 function queryexpirejingdou() {
     return new Promise(async resolve => {
@@ -905,8 +847,6 @@ function queryexpirejingdou() {
                             data['expirejingdou'].map(item => {
                                 if (item['expireamount'] != 0) {
                                     strGuoqi += `【${timeFormat(item['time'] * 1000)}】过期${item['expireamount']}豆\n`;
-                                    if (decExBean == 0)
-                                        decExBean = item['expireamount'];
                                 }
                             })
                         }
