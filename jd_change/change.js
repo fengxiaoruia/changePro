@@ -8,7 +8,10 @@ cron "30 21 * * *" jd_bean_change.js, tag:资产变化强化版by-ccwav
 const $ = new Env('京东资产变动');
 const request = require('request');
 const fs = require("fs")
-const md5 = require("md5");
+const md5 = require('js-md5')
+const CryptoJS = require('crypto-js')
+const sha256 = require("js-sha256").sha256;
+const sha512 = require('js-sha512').sha512
 let ReturnMessage = '';
 let ReturnMessageMonth = '';
 let ReturnMessageTitle = "";
@@ -92,11 +95,12 @@ async function getChangePro(ck) {
             TotalBean(),
             bean(), //京豆查询
             queryexpirejingdou(),
-            jdfruitRequest('taskInitForFarm', {
-                "version": 14,
-                "channel": 1,
-                "babelChannel": "120"
-            }),
+            getjdfruitinfo(),
+            // jdfruitRequest('taskInitForFarm', {
+            //     "version": 14,
+            //     "channel": 1,
+            //     "babelChannel": "120"
+            // }),
             redPacket(),
             mcx1(),
             mcx2(),
@@ -116,7 +120,7 @@ async function getChangePro(ck) {
             queryScores(),
             hfjifen(),
             diandianquan(),
-            getjdfruit(),//农场
+            // getjdfruit(),//农场
             jxgold(),
             trialcount(),
             trialWaitdraw(),
@@ -1228,8 +1232,8 @@ function taskMsPostUrl(function_id, body = {}, extra = '', function_id2) {
 
 function jdfruitRequest(function_id, body = {}, timeout = 1000) {
     return new Promise(resolve => {
-        setTimeout(() => {
-            $.get(taskfruitUrl(function_id, body), (err, resp, data) => {
+        setTimeout(async () => {
+            $.get(await taskfruitUrl(function_id, body), (err, resp, data) => {
                 // console.log("请求完成")
                 // console.log(data)
                 try {
@@ -1258,10 +1262,10 @@ function jdfruitRequest(function_id, body = {}, timeout = 1000) {
 async function getjdfruitinfo() {
     llgeterror = false;
     await jdfruitRequest('taskInitForFarm', {
-        "version": 14,
+        "version": 18,
         "channel": 1,
-        "babelChannel": "120"
-    });
+        "babelChannel": "0"
+    })
     await getjdfruit();
 }
 
@@ -1272,19 +1276,22 @@ async function GetJxBeaninfo() {
 }
 
 async function getjdfruit() {
+    let body1 = {"babelChannel":"121","sid":"","un_area":"","version":19,"channel":1,"lat":"0","lng":"0"}
+    let t = Date.now()
+    let h5st = await getfarmH5st("8a2af","initForFarm",JSON.stringify(body1),"signed_wh5","android",t,"11.4.0")
+    // console.log(h5st)
     return new Promise(resolve => {
         const option = {
-            url: `${JD_API_HOST}?functionId=initForFarm`,
-            body: `body=${escape(JSON.stringify({"version": 4}))}&appid=wh5&clientVersion=9.1.0`,
+            url: `https://api.m.jd.com/client.action?functionId=initForFarm&body=%7B%22babelChannel%22%3A%22121%22%2C%22sid%22%3A%22%22%2C%22un_area%22%3A%22%22%2C%22version%22%3A19%2C%22channel%22%3A1%2C%22lat%22%3A%220%22%2C%22lng%22%3A%220%22%7D&appid=signed_wh5&timestamp=${t}&client=android&clientVersion=11.4.0&h5st=${h5st}`,
             headers: {
                 "accept": "*/*",
                 "accept-encoding": "gzip, deflate, br",
                 "accept-language": "zh-CN,zh;q=0.9",
                 "cache-control": "no-cache",
                 "cookie": cookie,
-                "origin": "https://home.m.jd.com",
+                "origin": "https://carry.m.jd.com",
                 "pragma": "no-cache",
-                "referer": "https://home.m.jd.com/myJd/newhome.action",
+                "referer": "https://carry.m.jd.com/",
                 "sec-fetch-dest": "empty",
                 "sec-fetch-mode": "cors",
                 "sec-fetch-site": "same-site",
@@ -1293,7 +1300,7 @@ async function getjdfruit() {
             },
             timeout: 10000
         };
-        $.post(option, (err, resp, data) => {
+        $.get(option, (err, resp, data) => {
             // console.log(JSON.parse(data))
             try {
                 if (err) {
@@ -1306,6 +1313,7 @@ async function getjdfruit() {
                     llgeterror = false;
                     if (safeGet(data)) {
                         $.farmInfo = JSON.parse(data)
+                        console.log($.farmInfo)
                         if ($.farmInfo.farmUserPro) {
                             $.JdFarmProdName = $.farmInfo.farmUserPro.name;
                             $.JdtreeEnergy = $.farmInfo.farmUserPro.treeEnergy;
@@ -1314,7 +1322,6 @@ async function getjdfruit() {
                             let waterEveryDayT = $.JDwaterEveryDayT;
                             let waterTotalT = ($.farmInfo.farmUserPro.treeTotalEnergy - $.farmInfo.farmUserPro.treeEnergy - $.farmInfo.farmUserPro.totalEnergy) / 10; //一共还需浇多少次水
                             let waterD = Math.ceil(waterTotalT / waterEveryDayT);
-
                             $.JdwaterTotalT = waterTotalT;
                             $.JdwaterD = waterD;
                         }
@@ -1367,17 +1374,25 @@ function taskPetUrl(function_id, body = {}) {
     };
 }
 
-function taskfruitUrl(function_id, body = {}) {
+async function taskfruitUrl(function_id, body = {}) {
+    let appid = 'signed_wh5'
+    let functionId = function_id
+    let body1 = JSON.stringify(body)
+    let client = 'android'
+    let t = Date.now()
+    let appId = 'fcb5a'
+    let clientVersion = '11.3.4'
+    let farh5st = await getfarmH5st(appId, functionId, body1, appid, client, t, clientVersion)
     return {
-        url: `${JD_API_HOST}?functionId=${function_id}&body=${encodeURIComponent(JSON.stringify(body))}&appid=wh5`,
+        url: `${JD_API_HOST}?functionId=${function_id}&body=${encodeURIComponent(JSON.stringify(body))}&appid=signed_wh5&timestamp=${t}&clientVersion=${clientVersion}&client=${client}&h5st=${encodeURIComponent(farh5st)}`,
         headers: {
             "Host": "api.m.jd.com",
             "Accept": "*/*",
-            "Origin": "https://carry.m.jd.com",
+            "origin": "https://carry.m.jd.com",
             "Accept-Encoding": "gzip, deflate, br",
-            "User-Agent": $.isNode() ? (process.env.JD_USER_AGENT ? process.env.JD_USER_AGENT : (require('./USER_AGENTS').USER_AGENT)) : ($.getdata('JDUA') ? $.getdata('JDUA') : "jdapp;iPhone;9.4.4;14.3;network/4g;Mozilla/5.0 (iPhone; CPU iPhone OS 14_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1"),
+            "User-Agent": `jdapp;android;11.3.4;;;appBuild/98475;ef/1;ep/%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1668518973085%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22sv%22%3A%22CJS%3D%22%2C%22ad%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22od%22%3A%22ZNG4DJPtEQHvYwC2DwS3Cq%3D%3D%22%2C%22ov%22%3A%22CzO%3D%22%2C%22ud%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D;jdSupportDarkMode/0;Mozilla/5.0 (Linux; Android 12; M2011K2C Build/SKQ1.220303.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/89.0.4389.72 MQQBrowser/6.2 TBS/046033 Mobile Safari/537.36`,
             "Accept-Language": "zh-CN,zh-Hans;q=0.9",
-            "Referer": "https://carry.m.jd.com/",
+            "referer": "https://carry.m.jd.com/",
             "Cookie": cookie
         },
         timeout: 10000
@@ -1602,6 +1617,7 @@ function jxTaskurl(functionId, body = '', stk) {
     }
 }
 
+
 //惊喜查询当前生产的商品名称
 function GetCommodityDetails() {
     return new Promise(async resolve => {
@@ -1776,6 +1792,123 @@ function taskJxUrl(functionId, body = '') {
     }
 }
 
+
+async function getfarmH5st(appId,functionId,body1,appid,client,t,clientVersion){
+    const date = new Date();
+    const year = date.getFullYear(); //获取当前年份
+    const mon = ("0" + (date.getMonth() + 1)).slice(-2); //获取当前月份
+    const da = ("0" + date.getDate()).slice(-2); //获取当前日
+    const h = ("0" + date.getHours()).slice(-2); //获取小时
+    const m = ("0" + date.getMinutes()).slice(-2); //获取分钟
+    const s = ("0" + date.getSeconds()).slice(-2); //获取秒
+    const ms = ("0" + date.getMilliseconds()).slice(-3); //获取毫秒
+    const timems = "" + year + mon + da + h + m + s + ms;
+    const ts = date.getTime();
+    const fp = getfp();
+    const bb = "3.0";
+
+    const rdb = {
+        "version": "3.0",
+        "fp": fp,
+        "appId": "08dc3",
+        "timestamp": ts,
+        "platform": "web",
+        "expandParams": ""
+    }
+    const rd1 = JSON.parse(await getrd(rdb))
+    let tk = rd1.data.result.tk
+    let algo = rd1.data.result.algo
+    let rd = algo.match(/rd='(\S*)';/)[1];
+    const text1 = tk + fp + timems + appId + rd
+    let ey1;
+    switch (algo.match(/return algo.(\S*)}/)[1]) {
+        case "HmacMD5(str,tk)":
+            ey1 = CryptoJS.HmacMD5(text1, tk).toString()
+            break
+        case "MD5(str)":
+            ey1 = md5(text1, tk).toString()
+            break
+        case "HmacSHA256(str,tk)":
+            ey1 = CryptoJS.HmacSHA256(text1, tk).toString()
+            break
+        case "HmacSHA512(str,tk)":
+            ey1 = CryptoJS.HmacSHA512(text1, tk).toString()
+            break
+        case "SHA256(str)":
+            ey1 = sha256(text1).toString()
+            break
+        case "SHA512(str)":
+            ey1 = sha512(text1).toString()
+            break
+        default:
+            ey1 = CryptoJS.HmacSHA512(text1, tk).toString()
+    }
+
+    const body = sha256(body1)
+    const text2 = `appid:${appid}&body:${body}&client:${client}&clientVersion:${clientVersion}&functionId:${functionId}`
+    const ey5 = CryptoJS.HmacSHA256(text2, ey1).toString();
+    const h5st = timems + ";" + fp + ";" + appId + ";" + tk + ";" + ey5 + ";" + bb + ";" + ts
+    return h5st
+}
+async function getrd(body) {
+    const options = {
+        url: 'https://cactus.jd.com/request_algo?g_ty=ajax',
+        headers: {
+            "accept": "application/json",
+            "accept-language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+            "cache-control": "no-cache",
+            "content-type": "application/json",
+            "pragma": "no-cache",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-site",
+            "x-requested-with": "com.jd.jdlite",
+            "Referer": "https://bnzf.jd.com/",
+            "Referrer-Policy": "strict-origin-when-cross-origin"
+        },
+        body: JSON.stringify(body)
+    };
+    return await reqpost(options);
+
+}
+
+function getfp() {
+    var fpa = [], fpit = '', fpiall = '', snum = '0123456789', fpid = '', fpli = snum, fpb = Math.random() * 0xa | 0x0;
+    do {
+        var gid = getRandomIDPro({'size': 1, 'customDict': fpli}) + '';
+        if (fpid.indexOf(gid) == -1) fpid += gid;
+    } while (fpid.length < 3);
+    for (let item of fpid.slice()) fpli = fpli.replace(item, '');
+    fpiall = getRandomIDPro({'size': fpb, 'customDict': fpli}) + '' + fpid + getRandomIDPro({
+        'size': 14 - (fpb + 3) + 1,
+        'customDict': fpli
+    }) + fpb + '';
+    fpit = fpiall.split('');
+    for (; fpit.length > 0;) {
+        fpa.push(9 - parseInt(fpit.pop()));
+    }
+    fpa = fpa.join('');
+    return fpa;
+}
+
+function getRandomIDPro() {
+    var iIlIl1i1, lIi1llIl,
+        Illllil = void 0 === (l1ililI = (lIi1llIl = 0 < arguments.length && void 0 !== arguments[0] ? arguments[0] : {}).size) ? 10 : l1ililI,
+        l1ililI = void 0 === (l1ililI = lIi1llIl.dictType) ? 'number' : l1ililI, ili1i11l = '';
+    if ((lIi1llIl = lIi1llIl.customDict) && 'string' == typeof lIi1llIl) iIlIl1i1 = lIi1llIl; else switch (l1ililI) {
+        case 'alphabet':
+            iIlIl1i1 = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            break;
+        case 'max':
+            iIlIl1i1 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-';
+            break;
+        case 'number':
+        default:
+            iIlIl1i1 = '0123456789';
+    }
+    for (; Illllil--;) ili1i11l += iIlIl1i1[Math.random() * iIlIl1i1.length | 0x0];
+    return ili1i11l;
+}
 
 function GetJxBeanDetailData() {
     return new Promise((resolve) => {
