@@ -8,7 +8,10 @@ cron "30 21 * * *" jd_bean_change.js, tag:资产变化强化版by-ccwav
 const $ = new Env('京东资产变动');
 const request = require('request');
 const fs = require("fs")
-const md5 = require("md5");
+const md5 = require('js-md5')
+const CryptoJS = require('crypto-js')
+const sha256 = require("js-sha256").sha256;
+const sha512 = require('js-sha512').sha512
 let ReturnMessage = '';
 let ReturnMessageMonth = '';
 let ReturnMessageTitle = "";
@@ -88,15 +91,16 @@ async function getChangePro(ck) {
         $.quanpin =""
         console.log(`******开始查询${$.nickName || $.UserName}*********`);
         var start = new Date().getTime()
-        await Promise.all([
+        await Promise.allSettled([
             TotalBean(),
             bean(), //京豆查询
-            jdfruitRequest('taskInitForFarm', {
-                "version": 14,
-                "channel": 1,
-                "babelChannel": "120"
-            }),
-            getjdfruit(),
+            queryexpirejingdou(),
+            getjdfruitinfo(),
+            // jdfruitRequest('taskInitForFarm', {
+            //     "version": 14,
+            //     "channel": 1,
+            //     "babelChannel": "120"
+            // }),
             redPacket(),
             mcx1(),
             mcx2(),
@@ -110,12 +114,13 @@ async function getChangePro(ck) {
             jdCash(), //领现金
             GetJxBean(),
             jxbean(),
-            GetPigPetInfo(), //金融养猪
+            // GetPigPetInfo(), //金融养猪
             GetJoyRuninginfo(), //汪汪赛跑
             CheckEcard(), //E卡查询
             queryScores(),
             hfjifen(),
             diandianquan(),
+            // getjdfruit(),//农场
             jxgold(),
             trialcount(),
             trialWaitdraw(),
@@ -375,12 +380,12 @@ async function bean() {
         yesterdayArr = [],
         todayArr = [];
     do {
-        let response = await getJingBeanBalanceDetail1(page);
+        let response = await getJingBeanBalanceDetail(page);
         // await $.wait(1000);
         // console.log(`第${page}页: ${JSON.stringify(response)}`);
         if (response && response.code === "0") {
             page++;
-            let detailList = response.detailList;
+            let detailList = response.jingDetailList;
             if (detailList && detailList.length > 0) {
                 for (let item of detailList) {
                     const date = item.date.replace(/-/g, '/') + "+08:00";
@@ -646,41 +651,7 @@ function apptaskUrl(functionId = "", body = "") {
     }
 }
 
-function getSign(functionId, body) {
-    return new Promise(async resolve => {
-        let data = {
-            functionId,
-            body: JSON.stringify(body),
-            "client": "apple",
-            "clientVersion": "10.3.0"
-        }
-        let HostArr = ['jdsign.cf', 'signer.nz.lu']
-        let Host = HostArr[Math.floor((Math.random() * HostArr.length))]
-        let options = {
-            url: `https://cdn.nz.lu/ddo`,
-            body: JSON.stringify(data),
-            headers: {
-                Host,
-                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1 Edg/87.0.4280.88"
-            },
-            timeout: 30 * 1000
-        }
-        $.post(options, (err, resp, data) => {
-            try {
-                if (err) {
-                    console.log(JSON.stringify(err))
-                    console.log(`${$.name} getSign API请求失败，请检查网路重试`)
-                } else {
 
-                }
-            } catch (e) {
-                $.logErr(e, resp)
-            } finally {
-                resolve(data);
-            }
-        })
-    })
-}
 
 function TotalBean() {
     return new Promise(async resolve => {
@@ -812,11 +783,10 @@ function isLoginByX1a0He() {
 function getJingBeanBalanceDetail(page) {
     return new Promise(async resolve => {
         const options = {
-            "url": `https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail`,
+            "url": `https://bean.m.jd.com/beanDetail/detail.json?page=${page}`,
             "body": `body=${escape(JSON.stringify({"pageSize": "20", "page": page.toString()}))}&appid=ld`,
             "headers": {
-                'User-Agent': $.isNode() ? (process.env.JD_USER_AGENT ? process.env.JD_USER_AGENT : (require('./USER_AGENTS').USER_AGENT)) : ($.getdata('JDUA') ? $.getdata('JDUA') : "jdapp;iPhone;9.4.4;14.3;network/4g;Mozilla/5.0 (iPhone; CPU iPhone OS 14_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1"),
-                'Host': 'api.m.jd.com',
+                'User-Agent': "Mozilla/5.0 (Linux; Android 12; SM-G9880) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Mobile Safari/537.36 EdgA/106.0.1370.47",
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'Cookie': cookie,
             }
@@ -824,18 +794,18 @@ function getJingBeanBalanceDetail(page) {
         $.post(options, (err, resp, data) => {
             try {
                 if (err) {
-                    console.log(`${JSON.stringify(err)}`)
-                    console.log(`getJingBeanBalanceDetail API请求失败，请检查网路重试`)
+                    // console.log(`${JSON.stringify(err)}`)
+                    // console.log(`${$.name} API请求失败，请检查网路重试`)
                 } else {
                     if (data) {
                         data = JSON.parse(data);
                         // console.log(data)
                     } else {
-                        console.log(`京东服务器返回空数据`)
+                        // console.log(`京东服务器返回空数据`)
                     }
                 }
             } catch (e) {
-                $.logErr(e, resp)
+                // $.logErr(e, resp)
             } finally {
                 resolve(data);
             }
@@ -843,214 +813,15 @@ function getJingBeanBalanceDetail(page) {
     })
 }
 
-function getJingBeanBalanceDetail1(page) {
-    let pageArr = [
-        {
-            "url": "",
-            "body": ""
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749526433&sign=7a2f06f8dc8cb1eedb902f6ab2dda174&sv=112",
-            "body": "lmt=0&body=%7B%22page%22%3A%221%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749528359&sign=c8593e3cd44377998dad7a277e68d91a&sv=102",
-            "body": "lmt=0&body=%7B%22page%22%3A%222%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749529385&sign=1614e99cc2c8d37eec9b1320c2fd2380&sv=100",
-            "body": "lmt=0&body=%7B%22page%22%3A%223%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749530523&sign=1df1753cee33589f36d4f7e120fd4b1e&sv=112",
-            "body": "lmt=0&body=%7B%22page%22%3A%224%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749531627&sign=405e28359c13bd6ebd5a63e3d5ca3c1d&sv=121",
-            "body": "lmt=0&body=%7B%22page%22%3A%225%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749532880&sign=623cbea8ba21a6dacedce01892311d94&sv=112",
-            "body": "lmt=0&body=%7B%22page%22%3A%226%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749533872&sign=9c2c0f77d5d6d0b10aed059e15ad3a2f&sv=120",
-            "body": "lmt=0&body=%7B%22page%22%3A%227%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749534913&sign=69e3fbfc3e67f9dfeb56c519e60ff8c8&sv=112",
-            "body": "lmt=0&body=%7B%22page%22%3A%228%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749535952&sign=f9200526882fb9e03276b129e283d478&sv=121",
-            "body": "lmt=0&body=%7B%22page%22%3A%229%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749537027&sign=31f7630264bb0ec817cea2148b5e26a7&sv=120",
-            "body": "lmt=0&body=%7B%22page%22%3A%2210%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749538048&sign=5e437dc9f72ae25ddfa82495c4c5eb81&sv=101",
-            "body": "lmt=0&body=%7B%22page%22%3A%2211%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749538981&sign=2d08081159a1db29d21d51b98b218fe1&sv=101",
-            "body": "lmt=0&body=%7B%22page%22%3A%2212%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749539950&sign=a07d1a6a93966fd6c2fedd39f80b62ab&sv=112",
-            "body": "lmt=0&body=%7B%22page%22%3A%2213%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749540766&sign=7c250b9274a316ee01f2669882bc317a&sv=100",
-            "body": "lmt=0&body=%7B%22page%22%3A%2214%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749541642&sign=bf6ea596c11a70b64921f2fc395ea078&sv=111",
-            "body": "lmt=0&body=%7B%22page%22%3A%2215%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749542417&sign=5a97e51b7eda7d02f20b224988c64dfb&sv=122",
-            "body": "lmt=0&body=%7B%22page%22%3A%2216%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749543292&sign=3d4af914f02eea8f75ef9a34c9233ce2&sv=110",
-            "body": "lmt=0&body=%7B%22page%22%3A%2217%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749544136&sign=f1c928b17a3cdba49cc3a339adfd2ca2&sv=101",
-            "body": "lmt=0&body=%7B%22page%22%3A%2218%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749545016&sign=19e3a1ff98f8c1448246734bc55a2bd3&sv=101",
-            "body": "lmt=0&body=%7B%22page%22%3A%2219%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749545829&sign=80da66ff01b7d963c4e5c2fd407bb746&sv=112",
-            "body": "lmt=0&body=%7B%22page%22%3A%2220%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749546908&sign=8d6a538e7e17b828713a058de610d58e&sv=101",
-            "body": "lmt=0&body=%7B%22page%22%3A%2221%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749547780&sign=0371f4e08a833657a222bcc44d6caf68&sv=102",
-            "body": "lmt=0&body=%7B%22page%22%3A%2222%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749548652&sign=e9b9cd87ac765b1af6a21192d90e1550&sv=112",
-            "body": "lmt=0&body=%7B%22page%22%3A%2223%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749549466&sign=914172adf5cfa659a97499a81ed3c8d0&sv=120",
-            "body": "lmt=0&body=%7B%22page%22%3A%2224%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749550263&sign=4f25538cbe4abd58dc58df5daf471170&sv=121",
-            "body": "lmt=0&body=%7B%22page%22%3A%2225%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749551052&sign=18eee663d9931431aaa9f0d8074f322a&sv=121",
-            "body": "lmt=0&body=%7B%22page%22%3A%2226%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749551775&sign=41f4d39c6088a05d706bdb1de4dbf781&sv=100",
-            "body": "lmt=0&body=%7B%22page%22%3A%2227%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749552586&sign=63073e7eeb0ea9872b526446fa79baf2&sv=112",
-            "body": "lmt=0&body=%7B%22page%22%3A%2228%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749553301&sign=0e34a890409ad9ba19c6fb1d03276e90&sv=121",
-            "body": "lmt=0&body=%7B%22page%22%3A%2229%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749554072&sign=8cf48488b43798056f6365fa47adb757&sv=122",
-            "body": "lmt=0&body=%7B%22page%22%3A%2230%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749554654&sign=f78baeeaf7663ebee44949e94230fdd3&sv=100",
-            "body": "lmt=0&body=%7B%22page%22%3A%2231%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749555301&sign=727c57700714a7220436591f8af78826&sv=111",
-            "body": "lmt=0&body=%7B%22page%22%3A%2232%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749556470&sign=63ef5f06f90154c856a2e4d9893bfb76&sv=100",
-            "body": "lmt=0&body=%7B%22page%22%3A%2233%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749557176&sign=48656c4f06f39b81c7fd8d8e401471ed&sv=120",
-            "body": "lmt=0&body=%7B%22page%22%3A%2234%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749558473&sign=f796f907ee7a2e12953ecf1af5a10a65&sv=101",
-            "body": "lmt=0&body=%7B%22page%22%3A%2235%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749559350&sign=a4cbe4a3ec6a6d7ff3621faaed0112c1&sv=121",
-            "body": "lmt=0&body=%7B%22page%22%3A%2236%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749560253&sign=c8b7dab72fa19be201a8d1f6847167ea&sv=121",
-            "body": "lmt=0&body=%7B%22page%22%3A%2237%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749561273&sign=7f223cab924ae6457445593f7e6077eb&sv=120",
-            "body": "lmt=0&body=%7B%22page%22%3A%2238%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749562024&sign=7bb233b817705e2e30955eda897120f3&sv=112",
-            "body": "lmt=0&body=%7B%22page%22%3A%2239%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749562685&sign=54938b5da945dc344c6f07a17ddf9667&sv=121",
-            "body": "lmt=0&body=%7B%22page%22%3A%2240%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749563499&sign=ef668309012bd9f4309f9413e36fbe0e&sv=121",
-            "body": "lmt=0&body=%7B%22page%22%3A%2241%22%2C%22pageSize%22%3A%2220%22%7D&"
-        },
-        {
-            "url": "https://api.m.jd.com/client.action?functionId=getJingBeanBalanceDetail&clientVersion=11.3.0&client=android&ef=1&ep=%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1665749508285%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22area%22%3A%22EP81DtLpDJK4CtZpCJS5CtSn%22%2C%22d_model%22%3A%22JWunCG%3D%3D%22%2C%22wifiBssid%22%3A%22dW5hbw93bq%3D%3D%22%2C%22osVersion%22%3A%22CJS%3D%22%2C%22d_brand%22%3A%22WQvrb21f%22%2C%22screen%22%3A%22CzKmDyenDNGm%22%2C%22uuid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22aid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22openudid%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D&st=1665749564792&sign=e4d2b513743cedf5ed2781d10230c64a&sv=121",
-            "body": "lmt=0&body=%7B%22page%22%3A%2242%22%2C%22pageSize%22%3A%2220%22%7D&"
-        }
-    ]
-
-    return new Promise(async resolve => {
-        const options = {
-            "url": pageArr[page].url,
-            "body": pageArr[page].body,
-            "headers": {
-                'User-Agent': $.isNode() ? (process.env.JD_USER_AGENT ? process.env.JD_USER_AGENT : (require('./USER_AGENTS').USER_AGENT)) : ($.getdata('JDUA') ? $.getdata('JDUA') : "jdapp;iPhone;9.4.4;14.3;network/4g;Mozilla/5.0 (iPhone; CPU iPhone OS 14_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1"),
-                'Host': 'api.m.jd.com',
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Cookie': cookie,
-            }
-        }
-        $.post(options, (err, resp, data) => {
-            try {
-                if (err) {
-                    console.log(`${JSON.stringify(err)}`)
-                    console.log(`getJingBeanBalanceDetail API请求失败，请检查网路重试`)
-                } else {
-                    if (data) {
-                        data = JSON.parse(data);
-                        console.log(data)
-                    } else {
-                        console.log(`京东服务器返回空数据`)
-                    }
-                }
-            } catch (e) {
-                $.logErr(e, resp)
-            } finally {
-                resolve(data);
-            }
-        })
-    })
+function randomnum(num) {
+    let string = '';
+    let str1 = "0123456789"
+    for (let i = 0; i < num; i++) {
+        string += str1.charAt(Math.floor(Math.random() * str1.length));
+    }
+    return string;
 }
+
 
 function queryexpirejingdou() {
     return new Promise(async resolve => {
@@ -1080,8 +851,6 @@ function queryexpirejingdou() {
                             data['expirejingdou'].map(item => {
                                 if (item['expireamount'] != 0) {
                                     strGuoqi += `【${timeFormat(item['time'] * 1000)}】过期${item['expireamount']}豆\n`;
-                                    if (decExBean == 0)
-                                        decExBean = item['expireamount'];
                                 }
                             })
                         }
@@ -1463,8 +1232,10 @@ function taskMsPostUrl(function_id, body = {}, extra = '', function_id2) {
 
 function jdfruitRequest(function_id, body = {}, timeout = 1000) {
     return new Promise(resolve => {
-        setTimeout(() => {
-            $.get(taskfruitUrl(function_id, body), (err, resp, data) => {
+        setTimeout(async () => {
+            $.get(await taskfruitUrl(function_id, body), (err, resp, data) => {
+                // console.log("请求完成")
+                // console.log(data)
                 try {
                     if (err) {
                         console.log('\n东东农场: API查询请求失败 ‼️‼️')
@@ -1474,6 +1245,7 @@ function jdfruitRequest(function_id, body = {}, timeout = 1000) {
                     } else {
                         if (safeGet(data)) {
                             data = JSON.parse(data);
+                            // console.log(data)
                             $.JDwaterEveryDayT = data.totalWaterTaskInit.totalWaterTaskTimes;
                         }
                     }
@@ -1490,10 +1262,10 @@ function jdfruitRequest(function_id, body = {}, timeout = 1000) {
 async function getjdfruitinfo() {
     llgeterror = false;
     await jdfruitRequest('taskInitForFarm', {
-        "version": 14,
+        "version": 18,
         "channel": 1,
-        "babelChannel": "120"
-    });
+        "babelChannel": "0"
+    })
     await getjdfruit();
 }
 
@@ -1504,19 +1276,22 @@ async function GetJxBeaninfo() {
 }
 
 async function getjdfruit() {
+    let body1 = {"babelChannel":"121","sid":"","un_area":"","version":19,"channel":1,"lat":"0","lng":"0"}
+    let t = Date.now()
+    let h5st = await getfarmH5st("8a2af","initForFarm",JSON.stringify(body1),"signed_wh5","android",t,"11.4.0")
+    // console.log(h5st)
     return new Promise(resolve => {
         const option = {
-            url: `${JD_API_HOST}?functionId=initForFarm`,
-            body: `body=${escape(JSON.stringify({"version": 4}))}&appid=wh5&clientVersion=9.1.0`,
+            url: `https://api.m.jd.com/client.action?functionId=initForFarm&body=%7B%22babelChannel%22%3A%22121%22%2C%22sid%22%3A%22%22%2C%22un_area%22%3A%22%22%2C%22version%22%3A19%2C%22channel%22%3A1%2C%22lat%22%3A%220%22%2C%22lng%22%3A%220%22%7D&appid=signed_wh5&timestamp=${t}&client=android&clientVersion=11.4.0&h5st=${h5st}`,
             headers: {
                 "accept": "*/*",
                 "accept-encoding": "gzip, deflate, br",
                 "accept-language": "zh-CN,zh;q=0.9",
                 "cache-control": "no-cache",
                 "cookie": cookie,
-                "origin": "https://home.m.jd.com",
+                "origin": "https://carry.m.jd.com",
                 "pragma": "no-cache",
-                "referer": "https://home.m.jd.com/myJd/newhome.action",
+                "referer": "https://carry.m.jd.com/",
                 "sec-fetch-dest": "empty",
                 "sec-fetch-mode": "cors",
                 "sec-fetch-site": "same-site",
@@ -1525,7 +1300,8 @@ async function getjdfruit() {
             },
             timeout: 10000
         };
-        $.post(option, (err, resp, data) => {
+        $.get(option, (err, resp, data) => {
+            // console.log(JSON.parse(data))
             try {
                 if (err) {
                     if (!llgeterror) {
@@ -1537,6 +1313,7 @@ async function getjdfruit() {
                     llgeterror = false;
                     if (safeGet(data)) {
                         $.farmInfo = JSON.parse(data)
+                        console.log($.farmInfo)
                         if ($.farmInfo.farmUserPro) {
                             $.JdFarmProdName = $.farmInfo.farmUserPro.name;
                             $.JdtreeEnergy = $.farmInfo.farmUserPro.treeEnergy;
@@ -1545,7 +1322,6 @@ async function getjdfruit() {
                             let waterEveryDayT = $.JDwaterEveryDayT;
                             let waterTotalT = ($.farmInfo.farmUserPro.treeTotalEnergy - $.farmInfo.farmUserPro.treeEnergy - $.farmInfo.farmUserPro.totalEnergy) / 10; //一共还需浇多少次水
                             let waterD = Math.ceil(waterTotalT / waterEveryDayT);
-
                             $.JdwaterTotalT = waterTotalT;
                             $.JdwaterD = waterD;
                         }
@@ -1598,17 +1374,25 @@ function taskPetUrl(function_id, body = {}) {
     };
 }
 
-function taskfruitUrl(function_id, body = {}) {
+async function taskfruitUrl(function_id, body = {}) {
+    let appid = 'signed_wh5'
+    let functionId = function_id
+    let body1 = JSON.stringify(body)
+    let client = 'android'
+    let t = Date.now()
+    let appId = 'fcb5a'
+    let clientVersion = '11.3.4'
+    let farh5st = await getfarmH5st(appId, functionId, body1, appid, client, t, clientVersion)
     return {
-        url: `${JD_API_HOST}?functionId=${function_id}&body=${encodeURIComponent(JSON.stringify(body))}&appid=wh5`,
+        url: `${JD_API_HOST}?functionId=${function_id}&body=${encodeURIComponent(JSON.stringify(body))}&appid=signed_wh5&timestamp=${t}&clientVersion=${clientVersion}&client=${client}&h5st=${encodeURIComponent(farh5st)}`,
         headers: {
             "Host": "api.m.jd.com",
             "Accept": "*/*",
-            "Origin": "https://carry.m.jd.com",
+            "origin": "https://carry.m.jd.com",
             "Accept-Encoding": "gzip, deflate, br",
-            "User-Agent": $.isNode() ? (process.env.JD_USER_AGENT ? process.env.JD_USER_AGENT : (require('./USER_AGENTS').USER_AGENT)) : ($.getdata('JDUA') ? $.getdata('JDUA') : "jdapp;iPhone;9.4.4;14.3;network/4g;Mozilla/5.0 (iPhone; CPU iPhone OS 14_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1"),
+            "User-Agent": `jdapp;android;11.3.4;;;appBuild/98475;ef/1;ep/%7B%22hdid%22%3A%22JM9F1ywUPwflvMIpYPok0tt5k9kW4ArJEU3lfLhxBqw%3D%22%2C%22ts%22%3A1668518973085%2C%22ridx%22%3A-1%2C%22cipher%22%3A%7B%22sv%22%3A%22CJS%3D%22%2C%22ad%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%2C%22od%22%3A%22ZNG4DJPtEQHvYwC2DwS3Cq%3D%3D%22%2C%22ov%22%3A%22CzO%3D%22%2C%22ud%22%3A%22ZtU0DzuzCtYnDwSmZtLrDK%3D%3D%22%7D%2C%22ciphertype%22%3A5%2C%22version%22%3A%221.2.0%22%2C%22appname%22%3A%22com.jingdong.app.mall%22%7D;jdSupportDarkMode/0;Mozilla/5.0 (Linux; Android 12; M2011K2C Build/SKQ1.220303.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/89.0.4389.72 MQQBrowser/6.2 TBS/046033 Mobile Safari/537.36`,
             "Accept-Language": "zh-CN,zh-Hans;q=0.9",
-            "Referer": "https://carry.m.jd.com/",
+            "referer": "https://carry.m.jd.com/",
             "Cookie": cookie
         },
         timeout: 10000
@@ -1833,6 +1617,7 @@ function jxTaskurl(functionId, body = '', stk) {
     }
 }
 
+
 //惊喜查询当前生产的商品名称
 function GetCommodityDetails() {
     return new Promise(async resolve => {
@@ -2007,6 +1792,123 @@ function taskJxUrl(functionId, body = '') {
     }
 }
 
+
+async function getfarmH5st(appId,functionId,body1,appid,client,t,clientVersion){
+    const date = new Date();
+    const year = date.getFullYear(); //获取当前年份
+    const mon = ("0" + (date.getMonth() + 1)).slice(-2); //获取当前月份
+    const da = ("0" + date.getDate()).slice(-2); //获取当前日
+    const h = ("0" + date.getHours()).slice(-2); //获取小时
+    const m = ("0" + date.getMinutes()).slice(-2); //获取分钟
+    const s = ("0" + date.getSeconds()).slice(-2); //获取秒
+    const ms = ("0" + date.getMilliseconds()).slice(-3); //获取毫秒
+    const timems = "" + year + mon + da + h + m + s + ms;
+    const ts = date.getTime();
+    const fp = getfp();
+    const bb = "3.0";
+
+    const rdb = {
+        "version": "3.0",
+        "fp": fp,
+        "appId": "08dc3",
+        "timestamp": ts,
+        "platform": "web",
+        "expandParams": ""
+    }
+    const rd1 = JSON.parse(await getrd(rdb))
+    let tk = rd1.data.result.tk
+    let algo = rd1.data.result.algo
+    let rd = algo.match(/rd='(\S*)';/)[1];
+    const text1 = tk + fp + timems + appId + rd
+    let ey1;
+    switch (algo.match(/return algo.(\S*)}/)[1]) {
+        case "HmacMD5(str,tk)":
+            ey1 = CryptoJS.HmacMD5(text1, tk).toString()
+            break
+        case "MD5(str)":
+            ey1 = md5(text1, tk).toString()
+            break
+        case "HmacSHA256(str,tk)":
+            ey1 = CryptoJS.HmacSHA256(text1, tk).toString()
+            break
+        case "HmacSHA512(str,tk)":
+            ey1 = CryptoJS.HmacSHA512(text1, tk).toString()
+            break
+        case "SHA256(str)":
+            ey1 = sha256(text1).toString()
+            break
+        case "SHA512(str)":
+            ey1 = sha512(text1).toString()
+            break
+        default:
+            ey1 = CryptoJS.HmacSHA512(text1, tk).toString()
+    }
+
+    const body = sha256(body1)
+    const text2 = `appid:${appid}&body:${body}&client:${client}&clientVersion:${clientVersion}&functionId:${functionId}`
+    const ey5 = CryptoJS.HmacSHA256(text2, ey1).toString();
+    const h5st = timems + ";" + fp + ";" + appId + ";" + tk + ";" + ey5 + ";" + bb + ";" + ts
+    return h5st
+}
+async function getrd(body) {
+    const options = {
+        url: 'https://cactus.jd.com/request_algo?g_ty=ajax',
+        headers: {
+            "accept": "application/json",
+            "accept-language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+            "cache-control": "no-cache",
+            "content-type": "application/json",
+            "pragma": "no-cache",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-site",
+            "x-requested-with": "com.jd.jdlite",
+            "Referer": "https://bnzf.jd.com/",
+            "Referrer-Policy": "strict-origin-when-cross-origin"
+        },
+        body: JSON.stringify(body)
+    };
+    return await reqpost(options);
+
+}
+
+function getfp() {
+    var fpa = [], fpit = '', fpiall = '', snum = '0123456789', fpid = '', fpli = snum, fpb = Math.random() * 0xa | 0x0;
+    do {
+        var gid = getRandomIDPro({'size': 1, 'customDict': fpli}) + '';
+        if (fpid.indexOf(gid) == -1) fpid += gid;
+    } while (fpid.length < 3);
+    for (let item of fpid.slice()) fpli = fpli.replace(item, '');
+    fpiall = getRandomIDPro({'size': fpb, 'customDict': fpli}) + '' + fpid + getRandomIDPro({
+        'size': 14 - (fpb + 3) + 1,
+        'customDict': fpli
+    }) + fpb + '';
+    fpit = fpiall.split('');
+    for (; fpit.length > 0;) {
+        fpa.push(9 - parseInt(fpit.pop()));
+    }
+    fpa = fpa.join('');
+    return fpa;
+}
+
+function getRandomIDPro() {
+    var iIlIl1i1, lIi1llIl,
+        Illllil = void 0 === (l1ililI = (lIi1llIl = 0 < arguments.length && void 0 !== arguments[0] ? arguments[0] : {}).size) ? 10 : l1ililI,
+        l1ililI = void 0 === (l1ililI = lIi1llIl.dictType) ? 'number' : l1ililI, ili1i11l = '';
+    if ((lIi1llIl = lIi1llIl.customDict) && 'string' == typeof lIi1llIl) iIlIl1i1 = lIi1llIl; else switch (l1ililI) {
+        case 'alphabet':
+            iIlIl1i1 = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            break;
+        case 'max':
+            iIlIl1i1 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-';
+            break;
+        case 'number':
+        default:
+            iIlIl1i1 = '0123456789';
+    }
+    for (; Illllil--;) ili1i11l += iIlIl1i1[Math.random() * iIlIl1i1.length | 0x0];
+    return ili1i11l;
+}
 
 function GetJxBeanDetailData() {
     return new Promise((resolve) => {
