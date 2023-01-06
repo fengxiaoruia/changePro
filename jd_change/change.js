@@ -93,6 +93,7 @@ async function getChangePro(ck) {
         var start = new Date().getTime()
         await Promise.allSettled([
             TotalBean(),
+            TotalBean2(),//京享值
             bean(), //京豆查询
             queryexpirejingdou(),
             getjdfruitinfo(),
@@ -151,7 +152,15 @@ async function showMsg() {
     ReturnMessageTitle = "";
     ReturnMessage = "";
     var strsummary = "";
-    ReturnMessage += `【账号】${$.nickName || $.UserName}\n`;
+    ReturnMessage += `【账号】${$.nickName || $.UserName}`;
+    if ($.JingXiang) {
+        if ($.levelName) {
+            ReturnMessage += "(";
+        }
+        ReturnMessage += `京享值:${$.JingXiang})\n`;
+    }else{
+        ReturnMessage += `\n`;
+    }
     if ($.levelName || $.JingXiang) {
         ReturnMessage += `【账号信息】`;
         if ($.levelName) {
@@ -180,15 +189,11 @@ async function showMsg() {
                 ReturnMessage += `${$.levelName}Plus`;
                 if ($.PlustotalScore)
                     ReturnMessage += `(${$.PlustotalScore}分)`
-            } else
+            } else{
                 ReturnMessage += `${$.levelName}会员`;
-        }
-
-        if ($.JingXiang) {
-            if ($.levelName) {
-                ReturnMessage += ",";
+                if ($.PlustotalScore)
+                    ReturnMessage += `(${$.PlustotalScore}分)`
             }
-            ReturnMessage += `${$.JingXiang}`;
         }
         ReturnMessage += `\n`;
     }
@@ -702,36 +707,31 @@ function TotalBean() {
 function TotalBean2() {
     return new Promise(async (resolve) => {
         const options = {
-            url: `https://wxapp.m.jd.com/kwxhome/myJd/home.json?&useGuideModule=0&bizId=&brandId=&fromType=wxapp&timestamp=${Date.now()}`,
+            url: `https://api.m.jd.com/?t=${Date.now()}&functionId=pg_channel_page_data&appid=vip_h5&body=%7B%22paramData%22:%7B%22token%22:%2260143dce-1cde-44de-8130-a6e5579e1567%22%7D%7D`,
             headers: {
                 Cookie: cookie,
                 'content-type': `application/x-www-form-urlencoded`,
                 Connection: `keep-alive`,
-                'Accept-Encoding': `gzip,compress,br,deflate`,
-                Referer: `https://servicewechat.com/wxa5bf5ee667d91626/161/page-frame.html`,
-                Host: `wxapp.m.jd.com`,
-                'User-Agent': `Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.10(0x18000a2a) NetType/WIFI Language/zh_CN`,
+                // 'Accept-Encoding': `gzip,compress,br,deflate`,
+                Referer: `https://vipgrowth.m.jd.com/`,
+                // Host: `wxapp.m.jd.com`,
+                'User-Agent': `Mozilla/5.0 (Linux; Android 13; M2011K2C Build/TKQ1.220829.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/86.0.4240.99 XWEB/4375 MMWEBSDK/20221109 Mobile Safari/537.36 MMWEBID/3965 MicroMessenger/8.0.31.2281(0x28001F37) WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64 miniProgram/wx91d27dbf599dff74`,
             },
             timeout: 10000
         };
-        $.post(options, (err, resp, data) => {
+        $.get(options, (err, resp, data) => {
             try {
                 if (err) {
                     $.logErr(err);
                 } else {
                     if (data) {
                         data = JSON.parse(data);
-                        if (!data.user) {
+                        if (!data.data) {
                             return;
                         }
-                        const userInfo = data.user;
-                        if (userInfo) {
-                            if (!$.nickName)
-                                $.nickName = userInfo.petName;
-                            if ($.beanCount == 0) {
-                                $.beanCount = userInfo.jingBean;
-                            }
-                            $.JingXiang = userInfo.uclass;
+                        const datas = data.data;
+                        if (datas) {
+                            $.JingXiang = datas.floorInfoList[4].floorData.jxScoreInfo.jxScore;
                         }
                     } else {
                         $.log('京东服务器返回空数据');
@@ -2341,8 +2341,8 @@ function GetDateTime(date) {
 }
 
 async function queryScores() {
-    if ($.isPlusVip != 1)
-        return
+    // if ($.isPlusVip != 1)
+    //     return
     let res = ''
     let url = {
         url: `https://rsp.jd.com/windControl/queryScore/v1?lt=m&an=plus.mobile&stamp=${Date.now()}`,
@@ -2356,6 +2356,7 @@ async function queryScores() {
     $.get(url, async (err, resp, data) => {
         try {
             const result = JSON.parse(data)
+            // console.log(result)
             if (result.code == 1000) {
                 $.PlustotalScore = result.rs.userSynthesizeScore.totalScore;
             }
