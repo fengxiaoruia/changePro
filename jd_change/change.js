@@ -939,41 +939,58 @@ function redPacket() {
                             $.jsRed = 0,
                             $.jdRed = 0,
                             $.jdhRed = 0,
+                            $.jdwxRed = 0,
+                            $.jdGeneralRed = 0,
                             $.jxRedExpire = 0,
                             $.jsRedExpire = 0,
                             $.jdRedExpire = 0,
                             $.jdhRedExpire = 0;
+                        $.jdwxRedExpire = 0,
+                            $.jdGeneralRedExpire = 0
                         let t = new Date();
                         t.setDate(t.getDate() + 1);
                         t.setHours(0, 0, 0, 0);
                         t = parseInt((t - 1) / 1000);
                         for (let vo of data.useRedInfo.redList || []) {
-                            if (vo.orgLimitStr && vo.orgLimitStr.includes("京喜")) {
+                            if (vo.limitStr && vo.limitStr.includes("京喜")) {
                                 $.jxRed += parseFloat(vo.balance)
                                 if (vo['endTime'] === t) {
                                     $.jxRedExpire += parseFloat(vo.balance)
                                 }
-                            } else if (vo.activityName.includes("特价")) {
+                            } else if (vo.limitStr.includes("购物小程序")) {
+                                $.jdwxRed += parseFloat(vo.balance)
+                                if (vo['endTime'] === t) {
+                                    $.jdwxRedExpire += parseFloat(vo.balance)
+                                }
+                            } else if (vo.limitStr.includes("京东商城")) {
+                                $.jdRed += parseFloat(vo.balance)
+                                if (vo['endTime'] === t) {
+                                    $.jdRedExpire += parseFloat(vo.balance)
+                                }
+                            } else if (vo.limitStr.includes("极速版") || vo.limitStr.includes("京东特价")) {
                                 $.jsRed += parseFloat(vo.balance)
                                 if (vo['endTime'] === t) {
                                     $.jsRedExpire += parseFloat(vo.balance)
                                 }
-                            } else if (vo.orgLimitStr && vo.orgLimitStr.includes("京东健康")) {
+                            } else if (vo.limitStr && vo.limitStr.includes("京东健康")) {
                                 $.jdhRed += parseFloat(vo.balance)
                                 if (vo['endTime'] === t) {
                                     $.jdhRedExpire += parseFloat(vo.balance)
                                 }
                             } else {
-                                $.jdRed += parseFloat(vo.balance)
+                                $.jdGeneralRed += parseFloat(vo.balance)
                                 if (vo['endTime'] === t) {
-                                    $.jdRedExpire += parseFloat(vo.balance)
+                                    $.jdGeneralRedExpire += parseFloat(vo.balance)
                                 }
                             }
                         }
                         $.jxRed = $.jxRed.toFixed(2);
                         $.jsRed = $.jsRed.toFixed(2);
                         $.jdRed = $.jdRed.toFixed(2);
+                        // $.jdRed = $.jdRed.toFixed(2);
                         $.jdhRed = $.jdhRed.toFixed(2);
+                        $.jdwxRed = $.jdwxRed.toFixed(2);
+                        $.jdGeneralRed = $.jdGeneralRed.toFixed(2);
                         $.balance = data.balance;
                         $.expiredBalance = ($.jxRedExpire + $.jsRedExpire + $.jdRedExpire).toFixed(2);
                         $.message += `【红包总额】${$.balance}(总过期${$.expiredBalance})R \n`;
@@ -985,6 +1002,10 @@ function redPacket() {
                             $.message += `【京东红包】${$.jdRed}(将过期${$.jdRedExpire.toFixed(2)})R \n`;
                         if ($.jdhRed > 0)
                             $.message += `【健康红包】${$.jdhRed}(将过期${$.jdhRedExpire.toFixed(2)})R \n`;
+                        if ($.jdwxRed > 0)
+                            $.message += `【微信小程序】${$.jdwxRed}(将过期${$.jdwxRedExpire.toFixed(2)})R \n`;
+                        if ($.jdGeneralRed > 0)
+                            $.message += `【全平台通用】${$.jdGeneralRed}(将过期${$.jdGeneralRedExpire.toFixed(2)})R \n`;
                     } else {
                         console.log(`京东服务器返回空数据`)
                     }
