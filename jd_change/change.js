@@ -30,6 +30,7 @@ let llgeterror = false;
 async function getChangePro(ck) {
     if (ck) {
         cookie = ck;
+        strGuoqi = ''
         $.pt_pin = (cookie.match(/pt_pin=([^; ]+)(?=;?)/) && cookie.match(/pt_pin=([^; ]+)(?=;?)/)[1]);
         $.UserName = decodeURIComponent(cookie.match(/pt_pin=([^; ]+)(?=;?)/) && cookie.match(/pt_pin=([^; ]+)(?=;?)/)[1]);
         $.CryptoJS = $.isNode() ? require('crypto-js') : CryptoJS;
@@ -107,7 +108,7 @@ async function getChangePro(ck) {
             mcx2(),
             getJoyBaseInfo(), //汪汪乐园
             getJdZZ(), //京东赚赚
-            getMs(), //京东秒杀
+            // getMs(), //京东秒杀
             cash(), //极速金币
             jdJxMCinfo(), //京喜牧场
             getJxFactory(), //京喜工厂
