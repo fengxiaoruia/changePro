@@ -19,7 +19,7 @@ let jdSignUrl = 'https://api.nolanstore.top/sign'
 if (process.env.SIGNURL)
     jdSignUrl = process.env.SIGNURL;
 let Expiring = true;
-let epsignurl="http://jx.fswyy.cf/api/getSignLNep";
+let epsignurl="http://fswyy.top:3500/api/getSignLNep";
 let cookie = '';
 const JD_API_HOST = 'https://api.m.jd.com/client.action';
 
